@@ -21,6 +21,8 @@ using System.Reflection;
 using Sitecore.Diagnostics.PerformanceCounters;
 using System.Data;
 using Sitecore.Jobs;
+using System.Text.RegularExpressions;
+
 
 namespace Sitecore.Support.sitecore.admin
 {
@@ -105,10 +107,15 @@ namespace Sitecore.Support.sitecore.admin
             return this.FixBrokenLinksInDatabase(database, serializeItem);
         }
 
+        private void RemoveLink(CustomField field)
+        {
+
+        }
+
         private int FixBrokenLinksInDatabase(Database database, bool serializeItem)
         {
             //Support FIX 103875
-              //Globals.LinkDatabase.Rebuild(database);
+              Globals.LinkDatabase.Rebuild(database);
               //ItemLink[] brokenLinks = Globals.LinkDatabase.GetBrokenLinks(database);
             //Support FIX 103875
             ItemLink[] brokenLinks = this.GetBrokenLinks(database);
@@ -120,15 +127,27 @@ namespace Sitecore.Support.sitecore.admin
                 if (sourceItem != null)
                 {
                     Field field = sourceItem.Fields[itemLink.SourceFieldID];
-                    CustomField field2 = FieldTypeManager.GetField(field);
-                    Assert.IsNotNull(field2, "customField");
+                    //Support FIX 103875
+                    //CustomField field2 = FieldTypeManager.GetField(field);
+                    //Assert.IsNotNull(field2, "customField");
                     using (new SecurityDisabler())
                     {
                         using (new EditContext(sourceItem))
                         {
-                            this.LogLinkRemove(itemLink);                                                                                                                                                                               
-                        field2.UpdateLink(itemLink);
-                        field2.RemoveLink(itemLink);
+                            this.LogLinkRemove(itemLink);
+                            IBrokenLinksRemove iLinkRemove = FieldTypeManager.GetFieldType(field.Type).GetField(field) as IBrokenLinksRemove;
+                            if ( iLinkRemove != null)
+                            {
+                                iLinkRemove.RemoveBrokenLinks(database);
+                                //IBrokenLinksRemove iBroken = field2 as IBrokenLinksRemove;
+                                //iBroken.RemoveBrokenLinks(database);
+                            }
+                            else
+                            {
+                                CustomField field2 = FieldTypeManager.GetField(field);
+                                Assert.IsNotNull(field2, "customField");
+                                field2.Value = String.Empty;
+                            }
                             if (serializeItem)
                             {
                                 if (sourceItem.Language == Language.Invariant)
@@ -140,6 +159,7 @@ namespace Sitecore.Support.sitecore.admin
                             Log.Info("Done", this);
                         }
                     }
+                    //Support FIX 103875
                 }
             }
             return brokenLinks.Length;
@@ -162,7 +182,6 @@ namespace Sitecore.Support.sitecore.admin
             using (DataProviderReader dataProviderReader = api.CreateReader(sql, new object[]
             {
         "database",
-       // this.GetString(database.Name, 150)
        getStringMethod.Invoke(linkDb, new object [] {database.Name,150})
             }))
             {
@@ -186,12 +205,12 @@ namespace Sitecore.Support.sitecore.admin
                 string name = database.Name;
                 while (reader.Read())
                 {
-                    ID sourceItemID = Data.ID.Parse(reader.GetGuid(0));
+                    ID sourceItemID = Sitecore.Data.ID.Parse(reader.GetGuid(0));
                     Language sourceItemLanguage = Language.Parse(reader.GetString(1));
                     Sitecore.Data.Version sourceItemVersion = Sitecore.Data.Version.Parse(reader.GetInt32(2));
-                    ID sourceFieldID = Data.ID.Parse(reader.GetGuid(3));
+                    ID sourceFieldID = Sitecore.Data.ID.Parse(reader.GetGuid(3));
                     string @string = reader.GetString(4);
-                    ID iD = Data.ID.Parse(reader.GetGuid(5));
+                    ID iD = Sitecore.Data.ID.Parse(reader.GetGuid(5));
                     Language language = Language.Parse(reader.GetString(6));
                     Sitecore.Data.Version version = Sitecore.Data.Version.Parse(reader.GetInt32(7));
                     string string2 = reader.GetString(8);
@@ -200,22 +219,16 @@ namespace Sitecore.Support.sitecore.admin
                     // links from the field and if the link from Db is not in the valid list, it will be considered 
                     // as broken.
                     bool flag = (bool)getItemExistsMethod.Invoke(Globals.LinkDatabase as object, new object[] { iD, string2, language, version, database2 });
-                    if (!flag && !Data.ID.IsNullOrEmpty(sourceFieldID))
+                    if (!flag && !Sitecore.Data.ID.IsNullOrEmpty(sourceFieldID))
                     {
                    
                         if (database.GetItem(sourceItemID).Paths.IsContentItem)
                         {
-                            Field linkField = database.GetItem(sourceItemID).Fields[sourceFieldID];
-                            CustomField cusLinkField = FieldTypeManager.GetField(linkField);
-                            LinksValidationResult validResult = new LinksValidationResult(linkField, ItemLinkState.Valid);
-                            cusLinkField.ValidateLinks(validResult);
                             ItemLink currentLink = new ItemLink(name, sourceItemID, sourceItemLanguage, sourceItemVersion, sourceFieldID, name, iD, language, version, string2);
-                            if (!validResult.Links.Contains(currentLink))
-                            {
-                             links.Add(currentLink);
-                            }
+                            links.Add(currentLink);
+                           
                         }
-                     }
+                    }
                     //Support FIX 103875
                     Job job = Sitecore.Context.Job;
                     if (job != null && job.Category == "GetBrokenLinks")

@@ -18,6 +18,11 @@
     <div class="wf-content">
       <h1>Remove Broken Links</h1>
       <p class="wf-subtitle">Removes the broken links to missing items.</p>
+        <i>
+            *Please note that this page removes the broken links of the content and media items. <br/>
+            The broken links of other items should be reviewed and processed manually.<br/>
+            One can use the 'Scan the database for broken links' report to obtain the link list.
+        </i>
       <div class="wf-configsection">
         <h2>Select databases</h2>
         <asp:CheckBoxList ID="Databases" runat="server"></asp:CheckBoxList>
